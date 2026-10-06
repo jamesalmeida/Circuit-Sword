@@ -21,7 +21,7 @@
 # This file exists in '/opt/retropie/configs/all/autostart.sh'
 
 # Restart to hdmi on boot to fix any changes to file
-sudo /usr/bin/python /home/pi/Circuit-Sword/settings/reboot_to_hdmi.py --check
+sudo /usr/bin/python3 /home/pi/Circuit-Sword/settings/reboot_to_hdmi.py --check
 
 # Load config file and action
 CONFIGFILE="/boot/config-cs.txt"
@@ -43,7 +43,7 @@ if [ -f $CONFIGFILE ]; then
   
   if [[ "$MODE" == "TESTER" && -n "$TESTER" ]] ; then
     echo "Starting TESTER.."
-    python $TESTER
+    python3 "$TESTER"
   elif [ "$MODE" == "SHELL" ] ; then
     echo "Starting SHELL.."
     exit 0

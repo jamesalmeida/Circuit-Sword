@@ -22,4 +22,4 @@ This is a simple project, and the build target is configured in config.h with th
 Once set, run `./rebuild.sh`. This was designed to be run ON a raspberry Pi, and ideally the build target (e.g. CM3)
  
 ### Rebuilding icons
-The icons are PNGs that are then converted into C includes so that file loading is not needed.  There is a converter in `icon_src` that you can run with `python convert_png_to_ch.py`. You will first need to set up the dirs in that python file, e.g. `root_dir = "/home/pi/Circuit-Sword-HUD/display"` is the default.
+The icons are PNGs that are then converted into C includes so that file loading is not needed.  There is a converter in `icon_src` that you can run with `python3 convert_png_to_ch.py`. You will first need to set up the dirs in that Python file, e.g. `root_dir = "/home/pi/Circuit-Sword-HUD/display"` is the default.

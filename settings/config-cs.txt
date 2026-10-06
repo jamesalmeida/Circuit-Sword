@@ -11,7 +11,7 @@ MODE=NORMAL
 # Cloner settings
 CLONER=ON
 
-# Location of tester script (gets called with <python $TESTER>)
+# Location of tester script (gets called with <python3 "$TESTER">)
 TESTER=/home/pi/Circuit-Sword/cs-tester/cs-tester.py
 
 # Startup Exec

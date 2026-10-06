@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import RPi.GPIO as GPIO
 import time
 
@@ -34,7 +36,7 @@ def shiftin(count=1):
   return result
 
 try:
-  print "STARTED!"
+  print("STARTED!")
 
   while(1):
     r = shiftin(3)
@@ -42,5 +44,6 @@ try:
     time.sleep(0.017)
 
 except KeyboardInterrupt:
-  GPIO.cleanup
-GPIO.cleanup
+  pass
+finally:
+  GPIO.cleanup()
