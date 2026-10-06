@@ -1,0 +1,2 @@
+# Unified-diff context must retain the whitespace in the original target files.
+patches/legacy-retropie/*.patch -whitespace
