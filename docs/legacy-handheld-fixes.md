@@ -24,6 +24,10 @@ partition. They do not constitute a modern OS image or a firmware update.
 The full SD backup was made **before** these changes. Restoring that image restores
 the original behavior; apply these patches afterward to recover the fixes.
 
+A later [display-wide bottom-margin experiment](display-margin-investigation.md)
+was rolled back because it caused flickering. The settings below remain the
+current stable configuration; they do not reserve a global bottom margin.
+
 ## Changes and evidence
 
 ### A confirms in configuration menus
