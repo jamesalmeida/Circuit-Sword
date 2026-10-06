@@ -151,6 +151,9 @@ The controller profiles and console-setup config were backed up but not changed.
 
 ## Remaining modernization work
 
+See the [software baseline and update path](software-baseline.md) for the observed
+versions and the migration sequence.
+
 The next work is [Python 3 compatibility (#1)](https://github.com/jamesalmeida/Circuit-Sword/issues/1),
 then [display/HUD support (#2)](https://github.com/jamesalmeida/Circuit-Sword/issues/2),
 then the [image builder (#3)](https://github.com/jamesalmeida/Circuit-Sword/issues/3).
