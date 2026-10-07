@@ -23,9 +23,9 @@ copied to the Mac first (outside Git) and verified by file count and bytes.
 - Appended the Circuit Sword block: SDIO Wi-Fi, `gpio-poweroff`, and the
   640×480 DPI settings from the Stretch card, including 2 px side margins.
 
-`cmdline.txt` gains `fbcon=rotate:2`. `display_rotate=2` and
-`display_lcd_rotate=2` are **not applied** under fkms (`vcgencmd get_config`
-reports no rotate value); the boot splash is upside down.
+`display_rotate=2` and `display_lcd_rotate=2` are **not applied** under fkms
+(`vcgencmd get_config` reports no rotate value), so they are commented out. See
+[Rotation](#rotation).
 
 Default target set to `multi-user.target` (console; the desktop left the LCD
 blank). Journald made persistent via
@@ -63,6 +63,35 @@ again.
 
 Bring-up logs are kept on the card in `/home/pi/cs-bringup/`.
 
+## Rotation
+
+The LCD is mounted upside down. Software options tried first:
+
+- `fbcon=rotate:2` rotates only console text.
+- `video=DSI-1:panel_orientation=upside_down` (fkms names the DPI connector
+  `DSI-1`) makes DRM rotate the console plane in hardware; combined with
+  `fbcon=rotate:2` the console was flipped twice. Neither affects DispmanX.
+
+**Adopted: rotate in the panel.** The MCU firmware forwards `L<hex>!` serial
+input to the LCD controller over SPI (`lcdSerial()` in
+`kite-arduino/CS_FIRMWARE/LCD.ino`). On this 54-pin 640×480 panel, whose init
+code Kite never published, writing `0x01` to register `0x36` flips both scan
+directions. Observed on the device after a power cycle:
+
+| Write | Result |
+| --- | --- |
+| `36 03` | one axis only (mirrored) |
+| `36 01` | clean 180° |
+
+This implies the stock init leaves bit 1 set. The register is volatile; the MCU
+re-initialises the panel at power-up. [`bookworm/cs-lcd-flip.service`](../bookworm/cs-lcd-flip.service)
+runs [`bookworm/lcd-flip.py`](../bookworm/lcd-flip.py) as soon as
+`/dev/ttyACM0` appears (~11 s; flip done at ~14 s), so console, HUD and all
+later graphics are upright with no software rotation. The first seconds of
+boot remain upside down. No MCU firmware was flashed.
+
+To undo: `sudo systemctl disable cs-lcd-flip` and power-cycle.
+
 ## HUD
 
 `libraspberrypi-dev` still provides `bcm_host`/DispmanX on Bookworm 32-bit, and
@@ -70,9 +99,10 @@ Kite's bundled `wiringpi_2.46_armhf.deb` installs (wiringPi is no longer
 packaged). The HUD builds unmodified against `pkg-config bcm_host` and runs
 under fkms: UART, Mode overlay and status icons work.
 
-Because fkms ignores `display_rotate`, the HUD's layers appeared upside down.
-`CS_HUD_ROTATE=180` (set in [`bookworm/cs-hud.service`](../bookworm/cs-hud.service))
-adds `DISPMANX_ROTATE_180` to each element. The firmware rotates elements about
+Before the panel flip, the HUD's layers appeared upside down. The opt-in
+`CS_HUD_ROTATE=180` environment variable adds `DISPMANX_ROTATE_180` to each
+element; it is **not set** now that the panel rotates, but remains for panels
+that cannot. The firmware rotates elements about
 the display, so destination rectangles must **not** be mirrored as well
 (tested: mirroring put the status bar at the bottom). Install with
 [`bookworm/install-cs-hud.sh`](../bookworm/install-cs-hud.sh).
@@ -82,7 +112,7 @@ the display, so destination rectangles must **not** be mirrored as well
 | Step | Status |
 | --- | --- |
 | 1. Boot, Wi-Fi, SSH | Pass (Wi-Fi after DKMS driver) |
-| 2. LCD output | Pass; console upright via `fbcon=rotate:2`; splash and graphics rotation open |
-| 3. HUD / safe shutdown | HUD pass (upright, icons top-right, Mode overlay); safe shutdown pending |
-| 4. Python 3 tools | Not started |
+| 2. LCD output | Pass; panel-level 180° flip from ~14 s into boot |
+| 3. HUD / safe shutdown | Pass: upright, icons top-right, Mode overlay, safe shutdown on power switch, autostart |
+| 4. Python 3 tools | Pass (config tool, tester USB/GPIO); tester `pngview` needs rebuild |
 | 5. RetroPie + one game | Not started |

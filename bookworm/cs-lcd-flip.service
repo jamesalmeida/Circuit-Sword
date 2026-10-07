@@ -1,0 +1,14 @@
+[Unit]
+Description=Circuit Sword: rotate LCD 180 degrees at the panel
+# Run as soon as the MCU's USB serial port exists, before most of userspace.
+DefaultDependencies=no
+After=dev-ttyACM0.device local-fs.target
+Wants=dev-ttyACM0.device
+Before=sysinit.target cs-hud.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /home/pi/Circuit-Sword/bookworm/lcd-flip.py
+
+[Install]
+WantedBy=sysinit.target
