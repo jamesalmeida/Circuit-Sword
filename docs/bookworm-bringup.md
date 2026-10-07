@@ -153,7 +153,10 @@ volume control must be `AudioDevice=Master` for the USB card (default `HDMI`
 gives "failed to find mixer elements"). Pixel theme help rows moved from
 `0.960/0.962` to `0.925`. An edge-band pattern shows the bottom bezel hides
 ~9–10 px; swapping the vertical porches (13↔32) made no difference and was
-reverted.
+reverted. Leaving that high-contrast static pattern up for ~10 minutes (twice)
+caused faint image retention that persisted through a power cycle and faded
+within about an hour of normal use. Keep test patterns brief, and clear
+`/dev/fb0` afterwards.
 
 ## Spike checklist
 
