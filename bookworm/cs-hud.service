@@ -2,8 +2,6 @@
 Description=Circuit Sword HUD/OSD Service (Bookworm build)
 
 [Service]
-# fkms ignores display_rotate, so the HUD rotates its own DispmanX layers.
-Environment=CS_HUD_ROTATE=180
 ExecStart=/home/pi/Circuit-Sword/cs-hud/src/cs-hud
 Restart=on-failure
 
