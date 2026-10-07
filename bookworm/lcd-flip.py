@@ -2,8 +2,8 @@
 """Rotate the DMG-CM3 640x480 LCD 180 degrees in the panel itself.
 
 The Circuit Sword MCU forwards 'L<hex>!' to the LCD controller over SPI.
-Writing 0x01 to the panel's address-mode register (0x36) flips both scan
-directions, so every layer (console, DispmanX, KMS) is upright without any
+Writing 0x09 to the panel's address-mode register (0x36) flips both scan
+directions (bit 0) and keeps BGR order (bit 3), so every layer (console, DispmanX, KMS) is upright without any
 software rotation. The register is volatile: the MCU re-initialises the
 panel on power-up, so this runs at every boot.
 """
@@ -13,7 +13,7 @@ import time
 import serial
 
 PORT = "/dev/ttyACM0"
-COMMAND = b"L3601!"
+COMMAND = b"L3609!"
 
 for attempt in range(10):
     try:
