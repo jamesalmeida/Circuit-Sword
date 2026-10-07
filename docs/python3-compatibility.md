@@ -1,7 +1,9 @@
 # Python 3 compatibility
 
 Implementation for [issue #1](https://github.com/jamesalmeida/Circuit-Sword/issues/1).
-The development tests pass; the port has **not been installed on the handheld**.
+The development tests pass. The port is installed on the **spare restored card**
+(see [spare-card validation](#spare-card-validation)); the original working card
+is unchanged.
 This is one prerequisite for a supported OS image, not a validated OS upgrade.
 
 ## Changes
@@ -78,18 +80,71 @@ make that interpreter or OS supported. All repository Python files and the
 inline firmware-reset helper compiled under Python 3. Changed shell scripts
 passed `bash -n`. The shell flasher and GPIO prototypes were not run on hardware.
 
+## Spare-card validation
+
+On 2026-10-06 the port was installed on a 128 GB spare card restored from the
+pre-fix backup (Raspbian 9 Stretch, Python 3.5.3, Circuit Sword `bde930e`), after
+the [legacy usability patches](legacy-handheld-fixes.md) were reapplied.
+
+### Dependencies
+
+Stretch was removed from `raspbian.raspberrypi.org`, so `apt-get update` fails
+with the stock sources. Install from the legacy archive with a temporary source
+list, leaving `/etc/apt` unchanged:
+
+```sh
+printf 'deb http://legacy.raspbian.org/raspbian/ stretch main contrib non-free rpi\ndeb http://archive.raspberrypi.org/debian/ stretch main ui\n' > /tmp/stretch-legacy.list
+OPTS="-o Dir::Etc::SourceList=/tmp/stretch-legacy.list -o Dir::Etc::SourceParts=-"
+sudo apt-get $OPTS update
+sudo apt-get $OPTS install -y --no-install-recommends python3-serial python3-rpi.gpio
+```
+
+This installed `python3-serial` 3.2.1-1 and `python3-rpi.gpio` 0.6.5~stretch-1.
+The Python 2 packages remain installed.
+
+### Installed files
+
+All six repository files matched upstream `74398b1` byte-for-byte before
+replacement. The ported versions were copied over:
+
+- `/home/pi/Circuit-Sword/{cs-configure.py,cs-tester/cs-tester.py,flash-arduino.sh}`
+- `/home/pi/Circuit-Sword/settings/{reboot_to_hdmi.py,reboot_to_hdmi.sh,autostart.sh}`
+- installed caller copies `/opt/retropie/configs/all/autostart.sh` and
+  `/home/pi/RetroPie/retropiemenu/reboot_to_hdmi.sh`
+
+Originals of all eight are in
+`/home/pi/circuit-sword-maintenance/python3-20261006-180025/original-files.tar.gz`.
+
+### Results
+
+| Check | Result |
+| --- | --- |
+| Python files compile under 3.5.3; shell callers pass `bash -n` | Pass |
+| `reboot_to_hdmi.py --check` (boot path) | Pass: state IDLE, config unchanged |
+| `cs-configure.py` with `cs-hud` stopped, read-only, quit with `X` | Pass: all queries answered; Wi-Fi 1, backlight 100%, volume 90%, digital rocker 1, joysticks disabled (no sticks on DMG) |
+| `cs-hud` restarted afterward | Active |
+| `cs-tester.py`, two cycles, stopped with SIGINT | Pass: Arduino, audio, hub, joystick OK; SHDN ON; LCD pattern shown; clean exit |
+| HDMI switch and return to DPI | Pending |
+
+No toggles or calibrations were sent, and the MCU was not flashed.
+
+### Roll back
+
+```sh
+sudo tar -C / -xzf /home/pi/circuit-sword-maintenance/python3-20261006-180025/original-files.tar.gz
+```
+
+The added apt packages are harmless to the Python 2 scripts and can stay.
+
 ## Remaining device validation
 
-Keep issue #1 open until the CM3 spare card checks pass. Restore and boot the
-backup first, and reapply the committed usability patches. Preserve originals
-of any replaced files and record a distinct test build identifier before copying
-the port onto that card.
+Keep issue #1 open until these pass on the spare card:
 
-Check the tester's USB/GPIO/display behavior and the configuration menu with
-`cs-hud` stopped so only one program owns the serial port. Check readings first,
-then verify intended toggles and restore their original values. Restart the HUD
-after exiting. Test the HDMI transition and automatic return to DPI on that
-card, retaining the custom display settings. Do not flash the MCU for this port.
+- **HDMI:** run *Reboot to HDMI* from the RetroPie menu, confirm HDMI output,
+  then confirm the next boot returns to the LCD with the 2-pixel side margins
+  intact in `/boot/config.txt`.
+- **Toggles (optional):** in `cs-configure.py`, flip one setting such as the
+  digital volume rocker, confirm it changes, then flip it back.
 
-Rollback is to restore the original scripts/callers or reimage the spare card.
-The working card and its installed Python 2 scripts have not been changed.
+Do not flash the MCU for this port. The original working card and its Python 2
+scripts have not been changed.
