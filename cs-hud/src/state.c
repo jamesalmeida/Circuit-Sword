@@ -811,6 +811,12 @@ void state_process_fast_serial()
     if (cs_state.state == STATE_OSK || cs_state.state == STATE_MENU) {
       add_to_serial_queue(SERIAL_CMD_GET_BTN_LAST, 0);
     }
+
+    // The MCU changes the backlight itself; while the overlay is open, read
+    // it at the fast rate so the HUD percentage keeps up with the screen.
+    if (cs_state.state == STATE_MODE || cs_state.state == STATE_MENU) {
+      add_to_serial_queue(SERIAL_CMD_GET_BL, 0);
+    }
   }
 }
 
