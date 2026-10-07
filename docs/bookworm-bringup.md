@@ -119,6 +119,22 @@ the display, so destination rectangles must **not** be mirrored as well
 (tested: mirroring put the status bar at the bottom). Install with
 [`bookworm/install-cs-hud.sh`](../bookworm/install-cs-hud.sh).
 
+### Audio and backlight
+
+The C-Media USB card (`0d8c:0103`) reports a PCM range of −1…0 dB on kernel
+6.12; changing it is inaudible (tested with `speaker-test` at 100/30/5 %).
+Audio plays through pi's PipeWire session, so the HUD's root `amixer sset PCM`
+did nothing. `CS_HUD_AMIXER`/`CS_HUD_MIXER` (set in
+[`bookworm/cs-hud.service`](../bookworm/cs-hud.service)) make it run
+`amixer sset Master` as pi against PipeWire; failed sets retry every 2 s.
+Verified: HUD volume and mute work in-game. This DMG build has no volume
+rocker (the HDMI port took its place), so the Mode overlay is the only control.
+Headphone jack: [#8](https://github.com/jamesalmeida/Circuit-Sword/issues/8).
+
+The MCU changes the backlight itself; the HUD only reads it back on its slow
+poll, so its percentage lagged. It now also polls the backlight on the fast
+cycle while the Mode overlay or menu is open.
+
 ## RetroPie
 
 RetroPie-Setup `15b002c` (2026-10-06), `basic_install` with Bookworm rpi3/kms
@@ -147,4 +163,4 @@ reverted.
 | 2. LCD output | Pass; panel-level 180° flip from ~14 s into boot |
 | 3. HUD / safe shutdown | Pass: upright, icons top-right, Mode overlay, safe shutdown on power switch, autostart |
 | 4. Python 3 tools | Pass (config tool, tester USB/GPIO); tester `pngview` needs rebuild |
-| 5. RetroPie + one game | ES running, input configured (incl. L1/L2/R1/R2); game test pending ROM copy |
+| 5. RetroPie + one game | Pass: 12 systems of sample ROMs run; HUD volume/mute/brightness work; full ROM restore and HDMI ([#9](https://github.com/jamesalmeida/Circuit-Sword/issues/9)) pending |
