@@ -81,9 +81,12 @@ directions. Observed on the device after a power cycle:
 | Write | Result |
 | --- | --- |
 | `36 03` | one axis only (mirrored) |
-| `36 01` | clean 180° |
+| `36 01` | clean 180°, but red/blue swapped |
+| `36 09` | clean 180°, correct colours (**adopted**) |
 
-This implies the stock init leaves bit 1 set. The register is volatile; the MCU
+This implies the stock init leaves bit 1 (flip) and bit 3 (BGR) set; an 8-px
+edge-band test pattern showed red and blue exchanged with `36 01`. White text
+hides the swap, so check colours whenever this register changes. The register is volatile; the MCU
 re-initialises the panel at power-up. [`bookworm/cs-lcd-flip.service`](../bookworm/cs-lcd-flip.service)
 runs [`bookworm/lcd-flip.py`](../bookworm/lcd-flip.py) as soon as
 `/dev/ttyACM0` appears (~11 s; flip done at ~14 s), so console, HUD and all
@@ -94,10 +97,19 @@ To undo: `sudo systemctl disable cs-lcd-flip` and power-cycle.
 
 ## HUD
 
-`libraspberrypi-dev` still provides `bcm_host`/DispmanX on Bookworm 32-bit, and
+The legacy `libraspberrypi0`/`-dev` packages still exist for Bookworm 32-bit,
+but **must not be installed system-wide**: they conflict with `raspi-utils`, so
+apt silently removed ~19 packages including `raspberrypi-sys-mods`,
+`raspberrypi-net-mods`, `raspi-config` and `rpd-plym-splash`; RetroPie's
+install later removed `libraspberrypi0` again, breaking the HUD and with it the
+safe-shutdown power switch. [`bookworm/install-cs-hud.sh`](../bookworm/install-cs-hud.sh)
+now unpacks both debs privately into `/opt/cs-hud/userland` and links the HUD
+with an RPATH (`--disable-new-dtags`, so `libvchiq_arm`/`libvcos` resolve there
+too). The removed Pi system packages were reinstalled.
+
 Kite's bundled `wiringpi_2.46_armhf.deb` installs (wiringPi is no longer
-packaged). The HUD builds unmodified against `pkg-config bcm_host` and runs
-under fkms: UART, Mode overlay and status icons work.
+packaged). The HUD source builds unmodified and runs under fkms: UART, Mode
+overlay and status icons work.
 
 Before the panel flip, the HUD's layers appeared upside down. The opt-in
 `CS_HUD_ROTATE=180` environment variable adds `DISPMANX_ROTATE_180` to each
@@ -107,6 +119,26 @@ the display, so destination rectangles must **not** be mirrored as well
 (tested: mirroring put the status bar at the bottom). Install with
 [`bookworm/install-cs-hud.sh`](../bookworm/install-cs-hud.sh).
 
+## RetroPie
+
+RetroPie-Setup `15b002c` (2026-10-06), `basic_install` with Bookworm rpi3/kms
+binaries. Two pitfalls:
+
+- fkms makes RetroPie add the `dispmanx` platform flag, which makes
+  EmulationStation depend on `omxplayer` (absent on Bookworm). Run with
+  `__has_dispmanx=0`; RetroPie's packages use KMS anyway, and the HUD's
+  DispmanX use is independent.
+- Under a systemd unit whose stderr is the journal, RetroPie's download helper
+  cannot open `/dev/stderr`, so every `.asc` signature "fails" and binary
+  packages are silently skipped. Run it under `script -qfec` for a pty.
+
+`autostart enable` needs `raspi-config` (for console autologin). EmulationStation's
+volume control must be `AudioDevice=Master` for the USB card (default `HDMI`
+gives "failed to find mixer elements"). Pixel theme help rows moved from
+`0.960/0.962` to `0.925`. An edge-band pattern shows the bottom bezel hides
+~9–10 px; swapping the vertical porches (13↔32) made no difference and was
+reverted.
+
 ## Spike checklist
 
 | Step | Status |
@@ -115,4 +147,4 @@ the display, so destination rectangles must **not** be mirrored as well
 | 2. LCD output | Pass; panel-level 180° flip from ~14 s into boot |
 | 3. HUD / safe shutdown | Pass: upright, icons top-right, Mode overlay, safe shutdown on power switch, autostart |
 | 4. Python 3 tools | Pass (config tool, tester USB/GPIO); tester `pngview` needs rebuild |
-| 5. RetroPie + one game | Not started |
+| 5. RetroPie + one game | ES running, input configured (incl. L1/L2/R1/R2); game test pending ROM copy |
