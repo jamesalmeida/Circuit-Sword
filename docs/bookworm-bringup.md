@@ -55,6 +55,12 @@ Result: `wlan0` up at 192.168.184.136; `dkms status` reports
 `rtl8723bs-cs/6.12.y.43c132e … installed`; `linux-headers-rpi-v7` is installed
 so kernel upgrades pull matching headers and DKMS rebuilds the module.
 
+The kernel, headers and `raspi-firmware` are held (`apt-mark hold`) at
+6.12.109 so a routine upgrade cannot leave the handheld without Wi-Fi. To
+update deliberately: `sudo apt-mark unhold` those packages, upgrade, confirm
+`dkms status` shows the new kernel as installed *before* rebooting, then hold
+again.
+
 Bring-up logs are kept on the card in `/home/pi/cs-bringup/`.
 
 ## Spike checklist
@@ -62,7 +68,7 @@ Bring-up logs are kept on the card in `/home/pi/cs-bringup/`.
 | Step | Status |
 | --- | --- |
 | 1. Boot, Wi-Fi, SSH | Pass (Wi-Fi after DKMS driver) |
-| 2. LCD output | Pass; **rotation open** |
+| 2. LCD output | Pass; console upright via `fbcon=rotate:2`; splash and graphics rotation open |
 | 3. HUD / safe shutdown | Not started (power switch currently cuts power) |
 | 4. Python 3 tools | Not started |
 | 5. RetroPie + one game | Not started |
