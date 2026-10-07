@@ -2,6 +2,10 @@
 Description=Circuit Sword HUD/OSD Service (Bookworm build)
 
 [Service]
+# Audio goes through pi's PipeWire session; the USB card's hardware PCM
+# control has no audible effect on this kernel. Set PipeWire's volume instead.
+Environment="CS_HUD_AMIXER=runuser -u pi -- env XDG_RUNTIME_DIR=/run/user/1000 amixer"
+Environment=CS_HUD_MIXER=Master
 ExecStart=/home/pi/Circuit-Sword/cs-hud/src/cs-hud
 Restart=on-failure
 
