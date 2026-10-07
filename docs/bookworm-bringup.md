@@ -61,6 +61,13 @@ update deliberately: `sudo apt-mark unhold` those packages, upgrade, confirm
 `dkms status` shows the new kernel as installed *before* rebooting, then hold
 again.
 
+Wi-Fi throughput is poor: signal ~34 % (−72 dBm) with the antenna inside the
+case, and the driver defaults to power management (`rtw_power_mgnt=1`), which
+stalled large downloads (RetroPie's curl gives up after 60 s at <1 B/s).
+[`bookworm/r8723bs-cs.conf`](../bookworm/r8723bs-cs.conf) goes in
+`/etc/modprobe.d/` to disable driver power saving, and NetworkManager's
+connection uses `802-11-wireless.powersave 2` (disabled).
+
 Bring-up logs are kept on the card in `/home/pi/cs-bringup/`.
 
 ## Rotation
@@ -151,12 +158,20 @@ binaries. Two pitfalls:
 `autostart enable` needs `raspi-config` (for console autologin). EmulationStation's
 volume control must be `AudioDevice=Master` for the USB card (default `HDMI`
 gives "failed to find mixer elements"). Pixel theme help rows moved from
-`0.960/0.962` to `0.925`. An edge-band pattern shows the bottom bezel hides
+`0.960/0.962` to `0.925`; pixel-tft's system-view help row likewise (its
+gamelist help is placed off-screen at `1 1` by the theme). An edge-band pattern shows the bottom bezel hides
 ~9–10 px; swapping the vertical porches (13↔32) made no difference and was
 reverted. Leaving that high-contrast static pattern up for ~10 minutes (twice)
 caused faint image retention that persisted through a power cycle and faded
 within about an hour of normal use. Keep test patterns brief, and clear
 `/dev/fb0` afterwards.
+
+Optional emulators installed from binaries (`depends`, `install_bin`,
+`configure`): `lr-flycast`, `lr-ppsspp`, `lr-desmume`, `lr-yabause`,
+`lr-virtualjaguar`. apt only added libraries; nothing was removed. The full ROM
+collection (29.6 GB, byte-verified) was copied directly onto the card from the
+Mac once Paragon extFS was updated to mount Bookworm's ext4, then
+`chown -R pi:pi ~/RetroPie` on the device.
 
 ## Spike checklist
 
