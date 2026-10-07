@@ -31,6 +31,7 @@
 #include "element_change.h"
 #include "image.h"
 #include "imageLayer.h"
+#include "hudRotate.h"
 
 //-------------------------------------------------------------------------
 
@@ -154,7 +155,7 @@ addElementImageLayer(
                                 DISPMANX_PROTECTION_NONE,
                                 &alpha,
                                 NULL, // clamp
-                                DISPMANX_NO_ROTATE);
+                                hudTransform());
     assert(il->element != 0);
 }
 
@@ -229,7 +230,7 @@ moveImageLayer(
                                           &(il->dstRect),
                                           &(il->srcRect),
                                           0,
-                                          DISPMANX_NO_ROTATE);
+                                          hudTransform());
     assert(result == 0);
 }
 

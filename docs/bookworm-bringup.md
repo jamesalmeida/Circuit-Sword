@@ -63,12 +63,26 @@ again.
 
 Bring-up logs are kept on the card in `/home/pi/cs-bringup/`.
 
+## HUD
+
+`libraspberrypi-dev` still provides `bcm_host`/DispmanX on Bookworm 32-bit, and
+Kite's bundled `wiringpi_2.46_armhf.deb` installs (wiringPi is no longer
+packaged). The HUD builds unmodified against `pkg-config bcm_host` and runs
+under fkms: UART, Mode overlay and status icons work.
+
+Because fkms ignores `display_rotate`, the HUD's layers appeared upside down.
+`CS_HUD_ROTATE=180` (set in [`bookworm/cs-hud.service`](../bookworm/cs-hud.service))
+adds `DISPMANX_ROTATE_180` to each element. The firmware rotates elements about
+the display, so destination rectangles must **not** be mirrored as well
+(tested: mirroring put the status bar at the bottom). Install with
+[`bookworm/install-cs-hud.sh`](../bookworm/install-cs-hud.sh).
+
 ## Spike checklist
 
 | Step | Status |
 | --- | --- |
 | 1. Boot, Wi-Fi, SSH | Pass (Wi-Fi after DKMS driver) |
 | 2. LCD output | Pass; console upright via `fbcon=rotate:2`; splash and graphics rotation open |
-| 3. HUD / safe shutdown | Not started (power switch currently cuts power) |
+| 3. HUD / safe shutdown | HUD pass (upright, icons top-right, Mode overlay); safe shutdown pending |
 | 4. Python 3 tools | Not started |
 | 5. RetroPie + one game | Not started |
