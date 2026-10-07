@@ -1,0 +1,29 @@
+--- a/etc/emulationstation/themes/pixel/pixel.xml
++++ b/etc/emulationstation/themes/pixel/pixel.xml
+@@ -30,7 +30,7 @@
+                 </text>-->
+ 		
+ 		<helpsystem name="help">
+-			<pos>0.012 0.960</pos>
++			<pos>0.012 0.925</pos>
+ 			<textColor>ffffff</textColor>
+ 			<iconColor>ffffff</iconColor>
+ 			<fontPath>./art/font.ttf</fontPath>
+@@ -42,7 +42,7 @@
+     <view name="basic">
+ 
+ 		<helpsystem name="help">
+-			<pos>0.012 0.960</pos>
++			<pos>0.012 0.925</pos>
+ 			<textColor>ffffff</textColor>
+ 			<iconColor>ffffff</iconColor>
+ 			<fontPath>./art/font.ttf</fontPath>
+@@ -79,7 +79,7 @@
+ 	<view name="detailed">
+ 	
+ 		<helpsystem name="help">
+-			<pos>0.012 0.960</pos>
++			<pos>0.012 0.925</pos>
+ 			<textColor>ffffff</textColor>
+ 			<iconColor>ffffff</iconColor>
+ 			<fontPath>./art/font.ttf</fontPath>

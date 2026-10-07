@@ -23,6 +23,21 @@
 
 #include "state.h"
 
+#include <stdlib.h>
+#include <time.h>
+
+//----------------------------------------------------------------------------
+// Mixer command. Stock Kite images set the USB card's hardware "PCM" control
+// as root. On Bookworm that control has no audible effect and audio goes
+// through the user's PipeWire session, so the command is configurable:
+//   CS_HUD_AMIXER  command prefix (default "amixer")
+//   CS_HUD_MIXER   control name   (default "PCM")
+static const char *mixer_env(const char *name, const char *fallback)
+{
+  const char *value = getenv(name);
+  return (value != NULL && value[0] != '\0') ? value : fallback;
+}
+
 //-----------------------------------------------------------------------------
 
 // Default some sensible values
@@ -105,7 +120,10 @@ int8_t get_volume()
   FILE *fd;
 
   // Open wifi file
-  fd = popen("amixer sget PCM", "r");
+  char cmd[256];
+  snprintf(cmd, sizeof(cmd), "%s sget '%s'",
+           mixer_env("CS_HUD_AMIXER", "amixer"), mixer_env("CS_HUD_MIXER", "PCM"));
+  fd = popen(cmd, "r");
   if (fd == NULL) {
     printf("[!] ERROR: Failed to read amixer volume\n");
     return -1;
@@ -504,24 +522,32 @@ void process_volume()
   //  System volume level
 
   static int volume_last = -1;
+  static time_t last_failure = 0;
 
   if (cs_state.volume != volume_last) {
     if (cs_state.volume >= 0 && cs_state.volume <= 100) {
 
+      // After a failure (e.g. PipeWire not up yet at boot) retry every 2s
+      time_t now = time(NULL);
+      if (last_failure != 0 && now - last_failure < 2) {
+        return;
+      }
+
       // Build command string
-      char cmd[32];
-      snprintf(cmd, sizeof(cmd), "amixer sset PCM %i%%", cs_state.volume);
+      char cmd[256];
+      snprintf(cmd, sizeof(cmd), "%s -q sset '%s' %i%%",
+               mixer_env("CS_HUD_AMIXER", "amixer"),
+               mixer_env("CS_HUD_MIXER", "PCM"), cs_state.volume);
 
       // Apply the volume
-      FILE *fd;
-      fd = popen(cmd, "r");
-      if (fd == NULL) {
-        printf("[!] ERROR: Failed to set volume with amixer\n");
-      } else {
-        printf("[*] Setting volume to [%i]..\n", cs_state.volume);
-        // usleep(1000); //1ms
+      int status = system(cmd);
+      if (status != 0) {
+        printf("[!] ERROR: Failed to set volume with [%s] (status %i)\n", cmd, status);
+        last_failure = now;
+        return;
       }
-      pclose(fd);
+      printf("[*] Setting volume to [%i]..\n", cs_state.volume);
+      last_failure = 0;
 
       volume_last = cs_state.volume;
     }
@@ -784,6 +810,12 @@ void state_process_fast_serial()
 
     if (cs_state.state == STATE_OSK || cs_state.state == STATE_MENU) {
       add_to_serial_queue(SERIAL_CMD_GET_BTN_LAST, 0);
+    }
+
+    // The MCU changes the backlight itself; while the overlay is open, read
+    // it at the fast rate so the HUD percentage keeps up with the screen.
+    if (cs_state.state == STATE_MODE || cs_state.state == STATE_MENU) {
+      add_to_serial_queue(SERIAL_CMD_GET_BL, 0);
     }
   }
 }

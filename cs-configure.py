@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 #
 # This file originates from Kite's Circuit-Sword control board project.
@@ -20,38 +20,14 @@
 # along with this repo. If not, see <http://www.gnu.org/licenses/>.
 #
 
-import time
-import os, signal, sys
-import serial
-import subprocess
-import re
-import struct
 import argparse
 import logging
-import logging.handlers
+import subprocess
+import sys
+import time
 
-# PARSER LOGIC
-parser = argparse.ArgumentParser(description='Circuit Sword Configuration')
-parser.add_argument("-help", action="store_true", default=False, dest='help', help="show help message")
-parser.add_argument("-debug", action="store_true", default=False, dest='debug', help="show debug messages")
-parser.add_argument("--serport", action="store", default='/dev/ttyACM0', type=str, dest='serport', help="the serial port path")
-args = parser.parse_args()
-
-# Show help
-if args.help:
-  print("HELP")
-  sys.exit(0)
-
-#-------------------------------------------------------------------------------
-
-# Setup
-level = logging.INFO
-if args.debug:
-  level = logging.DEBUG
-logging.basicConfig(level=level)
-logging.info("Program Started")
-
-#-------------------------------------------------------------------------------
+# Opened only by main(); tests supply a fake endpoint.
+ser = None
 
 # Mapping data
 mapping = {
@@ -90,83 +66,47 @@ mapping = {
 
 #-------------------------------------------------------------------------------
 
-# Check cs-hud not running (as it uses the serial port)
-p = os.popen("service cs-hud status").readlines()
-for line in p:
-  if "active (running)" in line:
-    logging.exception("ERROR: 'cs-hud' is still running, stop it first with 'sudo service cs-hud stop'")
-    sys.exit(1)
+class SerialProtocolError(RuntimeError):
+  """The controller did not return the expected response."""
 
-# Set up a port
-try:
-  ser = serial.Serial(
-    port=args.serport,
-    baudrate=115200,
-    parity=serial.PARITY_NONE,
-    stopbits=serial.STOPBITS_ONE,
-    bytesize=serial.EIGHTBITS,
-    timeout=15
-  )
-except Exception as e:
-  logging.exception("ERROR: Failed to open serial port")
-  sys.exit(1)
 
-#-------------------------------------------------------------------------------
+def readSerial(msg, length=1, expect_ok=False):
+  """Read a fixed-size binary value or an explicit OK acknowledgement.
 
-# Serial read function
-def readSerial(msg, length=1):
-  ret = []
+  Binary values have no terminator: even b'?' and b'OK' can be valid data.
+  Only acknowledgement commands can reject '?' unambiguously.
+  """
+  if length < 1 or (expect_ok and length != 2):
+    raise ValueError("Invalid response length")
+  command = msg.encode('ascii')
+  logging.debug("Command [%s]..", msg)
+  if ser.write(command) != len(command):
+    raise SerialProtocolError("Incomplete write for command %r" % msg)
 
-  running = True
-  try:
-    logging.debug("Command [%s].." % msg)
-    ser.write(msg)
+  data = b''
+  while len(data) < length:
+    byte = ser.read(1)
+    if not byte:
+      raise TimeoutError("Command %r: expected %s bytes, received %r; "
+                         "controller may be disconnected or command unsupported"
+                         % (msg, length, data))
+    data += byte
+    if expect_ok and data == b'?':
+      raise SerialProtocolError("Command %r is not supported by the controller" % msg)
 
-    while running:
-      # Read something
-      ret.append(ser.read())
+  if expect_ok and data != b'OK':
+    raise SerialProtocolError("Command %r: expected OK, received %r" % (msg, data))
+  logging.debug("Command [%s] returned: %r", msg, data)
+  return data
 
-      if len(ret) >= length:
-        break;
 
-      # Check for end byte(s)
-      endcounter = 0
-      for c in ret:
-        if c == '?':
-          logging.error("ERROR: Bad return for command [%s] - Not supported! Update the Arduino code.." % msg)
-          endcounter = 2
-        elif c == 'O':
-          endcounter = 1
-        elif endcounter == 1 and c == 'K':
-          endcounter = 2
-        else:
-          endcounter = 0
-
-      # Check if end of bytes
-      if endcounter == 2:
-        break
-      
-  except Exception as err:
-    logging.error("ERROR: Serial get failed! %s" % err)
-    return None
-
-  logging.debug("Command [%s] returned: %s" % (msg, ret))
-  return ret
-
-# Convert unicode to fake byte
 def convert_to_fake_byte(data):
-  return bin(convert_to_byte(data))[2:].rjust(8, '0')[::-1]
-def convert_to_byte(data):
-  return ord(data)
+  # Iterating over Python 3 bytes produces integers, not one-character strings.
+  return format(data, '08b')[::-1]
+
+
 def convert_to_decimal(data):
-  decimal = 0
-  pos = 1
-  for byte in data:
-    for bit in convert_to_fake_byte(byte):
-      if bit == '1':
-        decimal += pos
-      pos *= 2
-  return decimal
+  return int.from_bytes(data, byteorder='little')
 
 # Get data
 def convert_data(config, command, is_binary=True, length=1):
@@ -174,11 +114,8 @@ def convert_data(config, command, is_binary=True, length=1):
 
   # Binary config data convert
   if is_binary:
-    if length > 1:
-      raise Exception("Not implemented")
-
     length = length * 8
-    data = convert_to_fake_byte(data[0])
+    data = ''.join(convert_to_fake_byte(byte) for byte in data)
 
     if len(data) != length:
       raise Exception("ERROR: Bad data")
@@ -218,7 +155,7 @@ def set_aud(state):
   # A 0/1
   return
 def toggle_dpad_joy():
-  readSerial('d', length=2)
+  readSerial('d', length=2, expect_ok=True)
   return
 
 def get_voltage():
@@ -232,10 +169,10 @@ def set_volume(volume):
 def get_avol_adc():
   return convert_data({}, 't', is_binary=False, length=2)
 def toggle_avol():
-  readSerial('C', length=2)
+  readSerial('C', length=2, expect_ok=True)
   return
 def toggle_dvol():
-  readSerial('z', length=2)
+  readSerial('z', length=2, expect_ok=True)
   return
 
 def get_backlight():
@@ -265,20 +202,20 @@ def get_joystick_config():
   )
 def set_joystick_config(toggle_j1=False, toggle_j2=False, invert_j1x=False, invert_j1y=False, invert_j2x=False, invert_j2y=False):
   if toggle_j1:
-    readSerial('{', length=2)
+    readSerial('{', length=2, expect_ok=True)
   if toggle_j2:
-    readSerial('}', length=2)
+    readSerial('}', length=2, expect_ok=True)
   if invert_j1x:
-    readSerial('(', length=2)
+    readSerial('(', length=2, expect_ok=True)
   if invert_j1y:
-    readSerial(')', length=2)
+    readSerial(')', length=2, expect_ok=True)
   if invert_j2x:
-    readSerial('[', length=2)
+    readSerial('[', length=2, expect_ok=True)
   if invert_j2y:
-    readSerial(']', length=2)
+    readSerial(']', length=2, expect_ok=True)
   return
 def calibrate_joystick():
-  readSerial('J', length=2)
+  readSerial('J', length=2, expect_ok=True)
   return
 
 def get_button_state():
@@ -359,7 +296,6 @@ ENTER - Refresh information
 X - Quit
 
 Enter selection followed by ENTER: """)
-  # key = raw_input()
   key = sys.stdin.read(1)
 
   if key == '1':
@@ -391,7 +327,7 @@ Enter selection followed by ENTER: """)
   elif key == '9':
     print(">>> Inverting DIGITAL VOLUME ROCKER enabled config..")
     toggle_dvol()
-  elif key == 'x' or key == 'X':
+  elif key in ('x', 'X', ''):
     sys.exit(0)
   else:
     print(">>> Refreshing..")
@@ -399,9 +335,52 @@ Enter selection followed by ENTER: """)
 
   time.sleep(2)
 
-# Main loop
-try:
-  while(True):
-    process_menu()
-except KeyboardInterrupt:
-  pass
+def main(argv=None):
+  global ser
+  parser = argparse.ArgumentParser(description='Circuit Sword Configuration')
+  parser.add_argument('-help', action='help', help='show help message')
+  parser.add_argument('-debug', action='store_true', help='show debug messages')
+  parser.add_argument('--serport', default='/dev/ttyACM0', help='the serial port path')
+  args = parser.parse_args(argv)
+  logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
+
+  try:
+    # Do not compete with the HUD for controller replies.
+    status = subprocess.check_output(['service', 'cs-hud', 'status'],
+                                     stderr=subprocess.STDOUT,
+                                     universal_newlines=True)
+  except subprocess.CalledProcessError as err:
+    status = err.output  # An inactive service normally exits nonzero.
+  except OSError as err:
+    logging.error("Cannot check cs-hud status: %s", err)
+    return 1
+  if 'active (running)' in status:
+    logging.error("cs-hud is running; stop it first with 'sudo service cs-hud stop'")
+    return 1
+
+  try:
+    import serial
+  except ImportError:
+    logging.error("Missing pyserial; install the python3-serial package")
+    return 1
+
+  try:
+    ser = serial.Serial(port=args.serport, baudrate=115200,
+                        parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE,
+                        bytesize=serial.EIGHTBITS, timeout=15, write_timeout=15)
+    while True:
+      process_menu()
+  except KeyboardInterrupt:
+    return 0
+  except (OSError, SerialProtocolError, serial.SerialException) as err:
+    # Stop after a failed transaction; later replies could be out of sync.
+    logging.error("Controller communication failed: %s", err)
+    return 1
+  finally:
+    if ser is not None:
+      ser.close()
+      ser = None
+
+
+if __name__ == '__main__':
+  sys.exit(main())

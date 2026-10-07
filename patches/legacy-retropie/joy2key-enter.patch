@@ -1,0 +1,24 @@
+--- a/home/pi/RetroPie-Setup/scriptmodules/supplementary/runcommand/joy2key.py
++++ b/home/pi/RetroPie-Setup/scriptmodules/supplementary/runcommand/joy2key.py
+@@ -213,7 +213,8 @@
+                 hex_chars = axis_codes[3]
+ 
+     if hex_chars:
+-        for c in hex_chars:
++        # Use terminal Enter (CR); whiptail does not accept LF in raw mode.
++        for c in hex_chars.replace('\n', '\r'):
+             fcntl.ioctl(tty_fd, termios.TIOCSTI, c)
+         return True
+ 
+--- a/opt/retropie/supplementary/runcommand/joy2key.py
++++ b/opt/retropie/supplementary/runcommand/joy2key.py
+@@ -213,7 +213,8 @@
+                 hex_chars = axis_codes[3]
+ 
+     if hex_chars:
+-        for c in hex_chars:
++        # Use terminal Enter (CR); whiptail does not accept LF in raw mode.
++        for c in hex_chars.replace('\n', '\r'):
+             fcntl.ioctl(tty_fd, termios.TIOCSTI, c)
+         return True
+ 

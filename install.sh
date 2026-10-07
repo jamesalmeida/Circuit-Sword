@@ -99,6 +99,10 @@ exists() { #FILE
 # LOGIC!
 echo "INSTALLING.."
 
+# Check dependencies before changing boot files or installing Python 3 callers.
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+bash "$SCRIPT_DIR/settings/install-python3-deps.sh" "${DEST:-/}" || exit 1
+
 # Checkout code if not already done so
 if ! exists "$BINDIR/LICENSE" ; then
   execute "git clone --recursive --depth 1 --branch $BRANCH $GITHUBURL $BINDIR"
@@ -194,9 +198,6 @@ execute "rm -f $DEST/etc/systemd/system/multi-user.target.wants/wifi-country.ser
 
 # Copy wifi firmware
 execute "cp $BINDIR/wifi-firmware/rtl* $DEST/lib/firmware/rtlwifi/"
-
-# Install python-serial
-execute "dpkg -x $BINDIR/settings/python-serial_2.6-1.1_all.deb $DEST/"
 
 # Install rfkill
 execute "dpkg -x $BINDIR/settings/rfkill_0.5-1_armhf.deb $DEST/"

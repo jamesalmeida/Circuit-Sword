@@ -1,5 +1,4 @@
-#!/usr/bin/env python
-# sudo apt-get install python-serial
+#!/usr/bin/env python3
 
 #
 # This file originates from Kite's Circuit-Sword control board project.
@@ -95,7 +94,7 @@ for png in png_files:
   print("[*] File: %s" % png)
 
   # Get file name
-  res = re.match('(.*)\.png', png)
+  res = re.match(r'(.*)\.png', png)
   if res:
     png_name = res.group(1).lower()
   else:
@@ -105,7 +104,7 @@ for png in png_files:
   print("    Path: %s" % png_path)
 
   # Execute conversion
-  proc = subprocess.Popen([converter_bin, '-p', png_path, '-n', png_name], stdout = subprocess.PIPE)
+  proc = subprocess.Popen([converter_bin, '-p', png_path, '-n', png_name], stdout=subprocess.PIPE, universal_newlines=True)
   out, err = proc.communicate()
 
   # Extract data

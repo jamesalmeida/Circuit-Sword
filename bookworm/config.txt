@@ -1,0 +1,73 @@
+# For more options and information see
+# http://rptl.io/configtxt
+# Some settings may impact device functionality. See link above for details
+
+# Uncomment some or all of these to enable the optional hardware interfaces
+#dtparam=i2c_arm=on
+#dtparam=i2s=on
+#dtparam=spi=on
+
+# Enable audio (loads snd_bcm2835)
+dtparam=audio=off
+
+# Additional overlays and parameters are documented
+# /boot/firmware/overlays/README
+
+# Automatically load overlays for detected cameras
+camera_auto_detect=1
+
+# Automatically load overlays for detected DSI displays
+display_auto_detect=1
+
+# Automatically load initramfs files, if found
+auto_initramfs=1
+
+# Enable DRM VC4 V3D driver
+dtoverlay=vc4-fkms-v3d
+max_framebuffers=2
+
+# Don't have the firmware create an initial video= setting in cmdline.txt.
+# Use the kernel's default instead.
+
+# Disable compensation for displays with overscan
+
+# Run as fast as firmware / board allows
+arm_boost=1
+
+[cm4]
+# Enable host mode on the 2711 built-in XHCI USB controller.
+# This line should be removed if the legacy DWC2 controller is required
+# (e.g. for USB device mode) or if USB support is not required.
+otg_mode=1
+
+[cm5]
+dtoverlay=dwc2,dr_mode=host
+
+[all]
+
+# --- Circuit Sword DMG-CM3 (Bookworm fkms spike, see docs/os-upgrade-plan.md) ---
+[all]
+gpu_mem=128
+avoid_warnings=2
+# Safe shutdown
+dtoverlay=gpio-poweroff,gpiopin=39,active_low="y"
+# RTL8723BS Wi-Fi on SDIO
+dtoverlay=sdio,poll_once=false
+hdmi_force_hotplug=1
+# 640x480 DPI LCD (values from the working Stretch card)
+dtoverlay=dpi18
+overscan_scale=1
+overscan_left=2
+overscan_right=2
+overscan_top=0
+overscan_bottom=0
+enable_dpi_lcd=1
+display_default_lcd=1
+dpi_group=2
+dpi_mode=87
+framebuffer_width=640
+framebuffer_height=480
+#display_rotate=2  # ignored by fkms; panel flipped by cs-lcd-flip.service
+#display_lcd_rotate=2
+dpi_output_format=516117
+hdmi_timings=640 1 32 48 88 480 1 13 3 32 0 0 0 60 0 32000000 1
