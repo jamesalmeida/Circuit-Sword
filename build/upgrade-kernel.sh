@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# 
+#
 # This file originates from Kite's Circuit Sword control board project.
 # Author: Kite (Giles Burgess)
-# 
+#
 # THIS HEADER MUST REMAIN WITH THIS FILE AT ALL TIMES
 #
 # This firmware is free software: you can redistribute it and/or modify
@@ -20,14 +20,20 @@
 # along with this repo. If not, see <http://www.gnu.org/licenses/>.
 #
 
+# Replaces the kernel and modules of a legacy RetroPie image (/boot layout)
+# with a kernel zip from build/build-kernel.txt. Writes a manifest next to the
+# new image; build-image.sh carries it into the final image's manifest.
+
 # sudo ./upgrade-kernel.sh "YES" "retropie-4.3-rpi2_rpi3.img" "pi_4.14.14-v7+.zip"
+
+set -euo pipefail
 
 if [ "$EUID" -ne 0 ]
   then echo "Please run as root (sudo)"
   exit 1
 fi
 
-if [ $# != 3 ] ; then
+if [ $# != 3 ] || [ "$1" != YES ] ; then
   echo "Usage: ./<cmd> YES <image.img> <kernel.zip>"
   exit 1
 fi
@@ -35,157 +41,76 @@ fi
 #####################################################################
 # Vars
 
-if [[ $2 != "" ]] ; then
-  IMG=$2
-fi
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=build/image-lib.sh
+. "$SCRIPT_DIR/image-lib.sh"
 
-if [[ $3 != "" ]] ; then
-  KERNELZIP=$3
-fi
-
+IMG=$2
+KERNELZIP=$3
 KERNEL="kernel7"
-
-GITHUBPROJECT="Circuit-Sword"
-GITHUBURL="https://github.com/kiteretro/$GITHUBPROJECT"
-PIHOMEDIR="$DEST/home/pi"
-BINDIR="$PIHOMEDIR/$GITHUBPROJECT"
-USER="pi"
-
-MOUNTFAT32="/mnt/fat32"
-MOUNTEXT4="/mnt/ext4"
-
-#####################################################################
-# Functions
-execute() { #STRING
-  if [ $# != 1 ] ; then
-    echo "ERROR: No args passed"
-    exit 1
-  fi
-  cmd=$1
-  
-  echo "[*] EXECUTE: [$cmd]"
-  eval "$cmd"
-  ret=$?
-  
-  if [ $ret != 0 ] ; then
-    echo "ERROR: Command exited with [$ret]"
-    exit 1
-  fi
-  
-  return 0
-}
-
-exists() { #FILE
-  if [ $# != 1 ] ; then
-    echo "ERROR: No args passed"
-    exit 1
-  fi
-  
-  file=$1
-  
-  if [ -f $file ]; then
-    echo "[i] FILE: [$file] exists."
-    return 0
-  else
-    echo "[i] FILE: [$file] does not exist."
-    return 1
-  fi
-}
-
-existsd() { #DIR
-  if [ $# != 1 ] ; then
-    echo "ERROR: No args passed"
-    exit 1
-  fi
-  
-  dir=$1
-  
-  if [ -d $dir ]; then
-    echo "[i] DIR: [$dir] exists."
-    return 0
-  else
-    echo "[i] DIR: [$dir] does not exist."
-    return 1
-  fi
-}
 
 #####################################################################
 # LOGIC!
 echo "BUILDING.."
 
-# Sanity check IMG
-if ! exists $IMG ; then
-  echo "ERROR: IMG [$IMG] doesn't exist"
-  exit 1
-fi
+image_require_tools unzip rsync sha256sum
 
-OUTFILE=$(basename $IMG .img)"_"$(basename $KERNELZIP .zip)".img"
+[[ -f "$IMG" ]] || die "IMG [$IMG] doesn't exist"
+[[ -f "$KERNELZIP" ]] || die "KERNELZIP [$KERNELZIP] doesn't exist"
 
-# Sanity check OUTFILE
-if exists $OUTFILE ; then
-  echo "ERROR: OUTFILE [$OUTFILE] exists! Can't create new image"
-  exit 1
-fi
+OUTFILE="$(basename "$IMG" .img)_$(basename "$KERNELZIP" .zip).img"
+MANIFEST="$OUTFILE.manifest"
+[[ ! -e "$OUTFILE" ]] || die "OUTFILE [$OUTFILE] exists! Can't create new image"
 
-# Check the mounted dir is clean
-MNTDIRCLEANCOUNT=$(ls $MOUNTFAT32 | wc -l)
-if [ $MNTDIRCLEANCOUNT != 0 ] ; then
-  echo "ERROR: Mount dir [$MOUNTFAT32] is not empty [$MNTDIRCLEANCOUNT], perhaps something is mounted on it?"
-  exit 1
-fi
+SUCCESS=0
+on_exit() {
+  image_cleanup || true
+  [[ -n "${UNZIPDIR:-}" ]] && rm -rf "$UNZIPDIR"
+  if ((SUCCESS == 0)); then
+    rm -f "$OUTFILE" "$MANIFEST"
+    echo "FAILED: no image was produced" >&2
+  fi
+}
+trap on_exit EXIT
 
-# Check the mounted dir is clean
-MNTDIRCLEANCOUNT=$(ls $MOUNTEXT4 | wc -l)
-if [ $MNTDIRCLEANCOUNT != 0 ] ; then
-  echo "ERROR: Mount dir [$MOUNTEXT4] is not empty [$MNTDIRCLEANCOUNT], perhaps something is mounted on it?"
-  exit 1
-fi
-
-# Remove dirs if they exist
-if existsd "pi" ; then
-  execute "rm -rf pi"
-fi
-if existsd "modules" ; then
-  execute "rm -rf modules"
-fi
+# Unzip kernel.zip into a private directory, never the current one
+UNZIPDIR=$(mktemp -d "${TMPDIR:-/tmp}/cs-kernel.XXXXXX")
+unzip -q "$KERNELZIP" -d "$UNZIPDIR"
+[[ -f "$UNZIPDIR/pi/$KERNEL.img" ]] || die "No [pi/$KERNEL.img] in $KERNELZIP"
+[[ -d "$UNZIPDIR/modules/lib/modules" ]] || die "No [modules/lib/modules] in $KERNELZIP"
 
 # Copy img to new + name
-execute "cp $IMG $OUTFILE"
+cp --sparse=always "$IMG" "$OUTFILE"
 
-# Unzip kernel.zip
-execute "unzip $KERNELZIP"
-
-# Check for folders
-if ! existsd "pi" ; then
-  echo "ERROR: UNZIPPED DIR [pi] doesn't exist! Check your $KERNELZIP"
-  exit 1
-fi
-if ! existsd "modules" ; then
-  echo "ERROR: UNZIPPED DIR [modules] doesn't exist! Check your $KERNELZIP"
-  exit 1
-fi
-
-# Mount
-execute "mount -o loop,offset=4194304 $OUTFILE $MOUNTFAT32"
-execute "mount -o loop,offset=63963136 $OUTFILE $MOUNTEXT4"
+image_find_partitions "$OUTFILE"
+image_mount_partitions "$OUTFILE"
+BOOT_DIR=$(image_boot_dir "$ROOT_MNT")
+[[ "$BOOT_DIR" == /boot ]] ||
+  die "The image mounts its boot partition at [$BOOT_DIR]; this legacy kernel is only for /boot images"
 
 # Install
-#execute "cp $MOUNTFAT32/$KERNEL.img $MOUNTFAT32/$KERNEL-backup.img"
-execute "cp pi/$KERNEL.img $MOUNTFAT32/$KERNEL.img"
-execute "cp pi/*.dtb $MOUNTFAT32"
-execute "cp pi/overlays/*.dtb* $MOUNTFAT32/overlays/"
-execute "cp pi/overlays/README $MOUNTFAT32/overlays/"
+cp "$UNZIPDIR/pi/$KERNEL.img" "$BOOT_MNT/$KERNEL.img"
+cp "$UNZIPDIR"/pi/*.dtb "$BOOT_MNT"
+cp "$UNZIPDIR"/pi/overlays/*.dtb* "$BOOT_MNT/overlays/"
+cp "$UNZIPDIR/pi/overlays/README" "$BOOT_MNT/overlays/"
 
-execute "rm -rf $MOUNTEXT4/lib/modules/*"
+rm -rf "$ROOT_MNT"/lib/modules/*
 
-execute "rsync -avh modules/ $MOUNTEXT4/"
+# -K keeps directory symlinks such as merged-/usr's /lib -> usr/lib
+rsync -aK "$UNZIPDIR/modules/" "$ROOT_MNT/"
 
-# Remove temp files
-execute "rm -rf modules/ pi/"
+{
+  echo "base_image: $(basename "$IMG")"
+  echo "base_image_sha256: $(sha256sum "$IMG" | cut -d' ' -f1)"
+  echo "kernel_zip: $(basename "$KERNELZIP")"
+  echo "kernel_zip_sha256: $(sha256sum "$KERNELZIP" | cut -d' ' -f1)"
+  echo "kernel_modules: $(ls "$UNZIPDIR/modules/lib/modules" | tr '\n' ' ')"
+} > "$MANIFEST"
 
-# Unmount
-execute "umount $MOUNTFAT32"
-execute "umount $MOUNTEXT4"
+# Unmount, then confirm both filesystems are still clean
+image_cleanup
+image_verify_filesystems "$OUTFILE"
 
 # DONE
+SUCCESS=1
 echo "SUCCESS: Image [$OUTFILE] has had its kernel upgraded!"
