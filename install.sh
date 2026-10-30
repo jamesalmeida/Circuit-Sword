@@ -46,10 +46,13 @@ else
 fi
 
 GITHUBPROJECT="Circuit-Sword"
-GITHUBURL="https://github.com/kiteretro/$GITHUBPROJECT"
+GITHUBURL=${CS_REPO_URL:-"https://github.com/jamesalmeida/$GITHUBPROJECT"}
 PIHOMEDIR="$DEST/home/pi"
 BINDIR="$PIHOMEDIR/$GITHUBPROJECT"
 USER="pi"
+
+# krextra/es-theme-pixel master, 2018-12-19; pinned so every build is the same
+PIXEL_THEME_COMMIT="50918176ba339ba7bb17b17f53cf94bc3d095d12"
 
 if [[ $2 != "" ]] ; then
   BRANCH=$2
@@ -95,9 +98,32 @@ exists() { #FILE
   fi
 }
 
+# Unpack a bundled .deb over $DEST without dpkg -x, whose tar replaces
+# directory symlinks: on merged-/usr images it turns /lib -> usr/lib into a
+# plain directory and the image no longer boots.
+extract_deb() { #DEB
+  (set -o pipefail; dpkg-deb --fsys-tarfile "$1" | tar -x --keep-directory-symlink -C "$DEST/")
+}
+
 #####################################################################
 # LOGIC!
 echo "INSTALLING.."
+
+# This installer targets legacy RetroPie images that mount the boot partition at
+# /boot. Bookworm and later mount it at /boot/firmware and need the separate
+# setup in docs/bookworm-bringup.md; writing /boot/config.txt there does nothing.
+FSTAB_BOOT=$(awk '$1 !~ /^#/ && $3 == "vfat" { print $2; exit }' "$DEST/etc/fstab" 2>/dev/null)
+if [[ -n "$FSTAB_BOOT" && "$FSTAB_BOOT" != "/boot" ]] ; then
+  echo "ERROR: The boot partition is mounted at [$FSTAB_BOOT], not /boot. install.sh only supports legacy RetroPie images; see docs/bookworm-bringup.md"
+  exit 1
+fi
+
+# Own files by the image's uid/gid, which the build host may not know by name.
+OWNER=$(awk -F: -v user="$USER" '$1 == user { print $3 ":" $4; exit }' "$DEST/etc/passwd")
+if [[ -z "$OWNER" ]] ; then
+  echo "ERROR: User [$USER] does not exist in [$DEST/etc/passwd]"
+  exit 1
+fi
 
 # Check dependencies before changing boot files or installing Python 3 callers.
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -107,7 +133,7 @@ bash "$SCRIPT_DIR/settings/install-python3-deps.sh" "${DEST:-/}" || exit 1
 if ! exists "$BINDIR/LICENSE" ; then
   execute "git clone --recursive --depth 1 --branch $BRANCH $GITHUBURL $BINDIR"
 fi
-execute "chown -R $USER:$USER $BINDIR"
+execute "chown -R $OWNER $BINDIR"
 
 #####################################################################
 # Copy required to /boot
@@ -137,7 +163,7 @@ if ! exists "$DEST/opt/retropie/configs/all/autostart_ORIGINAL.sh" ; then
   execute "cp $BINDIR/settings/splashscreen.list $DEST/etc/splashscreen.list"
 fi
 execute "cp $BINDIR/settings/autostart.sh $DEST/opt/retropie/configs/all/autostart.sh"
-execute "chown $USER:$USER $DEST/opt/retropie/configs/all/autostart.sh"
+execute "chown $OWNER $DEST/opt/retropie/configs/all/autostart.sh"
 
 # Copy ES safe shutdown script
 execute "cp $BINDIR/settings/cs_shutdown.sh $DEST/opt/cs_shutdown.sh"
@@ -159,14 +185,16 @@ fi
 if ! exists "$PIHOMEDIR/.vice/sdl-vicerc" ; then
   execute "mkdir -p $PIHOMEDIR/.vice/"
   execute "echo 'SoundOutput=2' > $PIHOMEDIR/.vice/sdl-vicerc"
-  execute "chown -R $USER:$USER $PIHOMEDIR/.vice/"
+  execute "chown -R $OWNER $PIHOMEDIR/.vice/"
 fi
 
 # Install the pixel theme and set it as default
 if ! exists "$DEST/etc/emulationstation/themes/pixel/system/theme.xml" ; then
   execute "mkdir -p $DEST/etc/emulationstation/themes"
   execute "rm -rf $DEST/etc/emulationstation/themes/pixel"
-  execute "git clone --recursive --depth 1 --branch master https://github.com/krextra/es-theme-pixel.git $DEST/etc/emulationstation/themes/pixel"
+  execute "git init -q $DEST/etc/emulationstation/themes/pixel"
+  execute "git -C $DEST/etc/emulationstation/themes/pixel fetch -q --depth 1 https://github.com/krextra/es-theme-pixel.git $PIXEL_THEME_COMMIT"
+  execute "git -C $DEST/etc/emulationstation/themes/pixel checkout -q FETCH_HEAD"
   execute "cp -p $BINDIR/settings/es_settings.cfg $DEST/opt/retropie/configs/all/emulationstation/es_settings.cfg"
   execute "sed -i \"s/carbon/pixel/\" $DEST/opt/retropie/configs/all/emulationstation/es_settings.cfg"
 fi
@@ -200,14 +228,14 @@ execute "rm -f $DEST/etc/systemd/system/multi-user.target.wants/wifi-country.ser
 execute "cp $BINDIR/wifi-firmware/rtl* $DEST/lib/firmware/rtlwifi/"
 
 # Install rfkill
-execute "dpkg -x $BINDIR/settings/rfkill_0.5-1_armhf.deb $DEST/"
+execute "extract_deb $BINDIR/settings/rfkill_0.5-1_armhf.deb"
 
 # Install avrdude
-execute "dpkg -x $BINDIR/settings/avrdude_6.3+r1425-1+rpt1_armhf.deb $DEST/"
-execute "dpkg -x $BINDIR/settings/libftdi1_0.20-4_armhf.deb $DEST/"
+execute "extract_deb $BINDIR/settings/avrdude_6.3+r1425-1+rpt1_armhf.deb"
+execute "extract_deb $BINDIR/settings/libftdi1_0.20-4_armhf.deb"
 
 # Install wiringPi
-execute "dpkg -x $BINDIR/settings/wiringpi_2.46_armhf.deb $DEST/"
+execute "extract_deb $BINDIR/settings/wiringpi_2.46_armhf.deb"
 
 # Enable /ramdisk as a tmpfs (ramdisk)
 if [[ $(grep '/ramdisk' $DEST/etc/fstab) == "" ]] ; then
@@ -230,8 +258,8 @@ execute "rm -f $DEST/lib/systemd/system/dpi-cloner.service"
 execute "cp $BINDIR/cs-hud/cs-hud.service $DEST/lib/systemd/system/cs-hud.service"
 
 #execute "systemctl enable cs-hud.service"
-execute "ln -s $DEST/lib/systemd/system/cs-hud.service $DEST/etc/systemd/system/cs-hud.service"
-execute "ln -s $DEST/lib/systemd/system/cs-hud.service $DEST/etc/systemd/system/multi-user.target.wants/cs-hud.service"
+execute "ln -s /lib/systemd/system/cs-hud.service $DEST/etc/systemd/system/cs-hud.service"
+execute "ln -s /lib/systemd/system/cs-hud.service $DEST/etc/systemd/system/multi-user.target.wants/cs-hud.service"
 
 # Install DPI-CLONER service
 execute "cp $BINDIR/dpi-cloner/dpi-cloner.service $DEST/lib/systemd/system/dpi-cloner.service"
