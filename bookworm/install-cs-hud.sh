@@ -8,6 +8,9 @@
 # removes it again). So unpack it privately under /opt/cs-hud/userland and
 # link the HUD there with an RPATH (not RUNPATH, so libbcm_host's own
 # dependencies resolve there too); apt never sees it.
+#
+# CS_IMAGE_BUILD=1 (set by the image builder's chroot) enables the service
+# without starting it.
 set -eu
 REPO=/home/pi/Circuit-Sword
 U=/opt/cs-hud/userland
@@ -31,7 +34,8 @@ sudo -u pi env \
   CFLAGS="-I$U/usr/include -I$U/usr/include/interface/vcos/pthreads -I$U/usr/include/interface/vmcs_host/linux" \
   LDFLAGS="-L$LIB -Wl,--disable-new-dtags,-rpath,$LIB" make -j4
 install -m 644 "$REPO/bookworm/cs-hud.service" /etc/systemd/system/cs-hud.service
-systemctl daemon-reload
 systemctl enable cs-hud.service
+[[ -z "${CS_IMAGE_BUILD:-}" ]] || exit 0
+systemctl daemon-reload
 systemctl restart cs-hud.service
 systemctl --no-pager status cs-hud.service | head -5

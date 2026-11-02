@@ -8,14 +8,26 @@
 #
 # Needs network, so run it over Ethernet/USB tethering, or use the offline
 # bring-up described in docs/bookworm-bringup.md.
+#
+# The image builder runs this in a chroot with KERNEL set to the image's kernel
+# (uname -r there is the build host's) and CS_IMAGE_BUILD=1, which skips
+# loading the module.
 set -eu
 
-COMMIT=${RTL8723BS_COMMIT:-43c132e}   # raspberrypi/linux rpi-6.12.y, 2026-10-05
+KERNEL=${KERNEL:-$(uname -r)}
+
+# raspberrypi/linux rpi-6.12.y, 2026-10-05. Full hash: GitHub only serves
+# fetches of complete commit IDs.
+COMMIT=${RTL8723BS_COMMIT:-43c132e8863c3bff3647033b6a7d2bf87b15501c}
 NAME=rtl8723bs-cs
 VER="6.12.y.${COMMIT:0:7}"
 SRC=/usr/src/$NAME-$VER
 
-apt-get install -y --no-install-recommends dkms git linux-headers-rpi-v7
+# Headers for exactly this kernel, plus the rpi-v7 metapackage so a later
+# deliberate kernel upgrade also pulls matching headers for DKMS
+apt-get install -y --no-install-recommends dkms git "linux-headers-$KERNEL" linux-headers-rpi-v7
+[[ -d /lib/modules/$KERNEL/build ]] ||
+  { echo "ERROR: no headers for kernel $KERNEL; is linux-headers-rpi-v7 a different version?" >&2; exit 1; }
 
 if [[ ! -f "$SRC/Makefile" ]]; then
   tmp=$(mktemp -d)
@@ -40,6 +52,6 @@ AUTOINSTALL="yes"
 CONF
 
 dkms status "$NAME/$VER" | grep -q . || dkms add "$NAME/$VER"
-dkms install --force "$NAME/$VER"
-modprobe r8723bs
+dkms install --force -k "$KERNEL" "$NAME/$VER"
+[[ -n "${CS_IMAGE_BUILD:-}" ]] || modprobe r8723bs
 dkms status "$NAME"
