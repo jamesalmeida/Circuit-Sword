@@ -101,6 +101,28 @@ out=$(in_lib 'image_find_partitions "$1"' "$IMG3" 2>&1)
 check "refuses a truncated image" grep -q "extends past the end" <<<"$out"
 rm -f "$IMG3"
 
+# Root ends 1 MiB before the end of the image; grow by 32 MiB more
+IMG4="$WORK/grow.img"
+cp "$IMG" "$IMG4"
+out=$(in_lib 'image_find_partitions "$1"; image_grow_root "$1" $((32 * 1024 * 1024))
+  echo "$ROOT_PARTNO $ROOT_OFFSET $ROOT_SIZE"
+  image_attach_checked "$1" "$ROOT_OFFSET" "$ROOT_SIZE" ext4 ro
+  dumpe2fs -h "$IMAGE_LOOP" 2>/dev/null | awk -F: "/^Block count/ { c = \$2 } /^Block size/ { s = \$2 } END { print c * s }"' "$IMG4" 2>&1)
+check "grows the root partition into the added space" [ "$(sed -n 1p <<<"$out")" == "2 102400000 101711872" ]
+check "grows the root filesystem to fill its partition" [ "$(sed -n 2p <<<"$out")" == "101711872" ]
+check "releases loop devices after growing" no_loops_under "$IMG4"
+rm -f "$IMG4"
+
+REPO_COMMIT=$(git -c safe.directory="$REPO" -c safe.directory="$REPO/.git" -C "$REPO" rev-parse HEAD)
+out=$(in_lib 'mkdir -p "$3"; image_clone_repo "$1" "$2" "$3/cs" https://example.invalid/cs
+  git -c safe.directory="*" -C "$3/cs" rev-parse HEAD
+  git -c safe.directory="*" -C "$3/cs" rev-list --count HEAD
+  git -c safe.directory="*" -C "$3/cs" config branch.master.merge' "$REPO" "$REPO_COMMIT" "$WORK/clone")
+check "clones one pinned commit as master tracking the fork" [ "$out" == "$REPO_COMMIT"$'\n1\nrefs/heads/master' ]
+out=$(in_lib 'image_clone_repo "$1" "$2" "$3/cs" https://example.invalid/cs' "$REPO" "$REPO_COMMIT" "$WORK/clone" 2>&1)
+check "refuses to clone over an existing checkout" grep -q "already contains" <<<"$out"
+rm -rf "$WORK/clone"
+
 #####################################################################
 echo "== build-image.sh failures leave nothing behind"
 

@@ -144,19 +144,9 @@ image_require_user "$ROOT_MNT" "$RUNTIME_USER"
 [[ "$IMAGE_HOME" == "/home/pi" ]] ||
   die "install.sh and the services expect /home/pi; [$RUNTIME_USER] has home [$IMAGE_HOME]"
 
-# Clone the pinned commit into the image as a branch that tracks the fork, so
-# update.sh can pull later. install.sh finds it and skips its own clone.
+# Clone the pinned commit into the image; install.sh finds it and skips its own clone.
 BINDIR="$ROOT_MNT$IMAGE_HOME/$GITHUBPROJECT"
-[[ ! -e "$BINDIR" ]] || die "The base image already contains [$IMAGE_HOME/$GITHUBPROJECT]"
-git init -q "$BINDIR"
-# A local fetch drops -c settings, so give the serving upload-pack its own.
-git -C "$BINDIR" fetch -q --depth 1 \
-  --upload-pack="git -c safe.directory='$REPO' -c safe.directory='$REPO/.git' upload-pack" \
-  "file://$REPO" "$COMMIT"
-git -C "$BINDIR" checkout -q -b master FETCH_HEAD
-git -C "$BINDIR" remote add origin "$CS_REPO_URL"
-git -C "$BINDIR" config branch.master.remote origin
-git -C "$BINDIR" config branch.master.merge refs/heads/master
+image_clone_repo "$REPO" "$COMMIT" "$BINDIR" "$CS_REPO_URL"
 
 # Install, using the installer from the pinned commit rather than this checkout
 bash "$BINDIR/install.sh" YES master "$BOOT_MNT" "$ROOT_MNT"
